@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SL Bus - One App All Roles</title>
+<style>
+*{box-sizing:border-box;font-family:Arial}body{margin:0;background:#f0f8f0;padding:0}
+.header{background:#0a8a4b;color:white;padding:12px;text-align:center;position:sticky;top:0;z-index:10}
+.nav{display:flex;background:white;box-shadow:0 2px 5px rgba(0,0,0,.1)}
+.nav button{flex:1;padding:12px;border:none;background:white;font-weight:bold;cursor:pointer}
+.nav button.active{background:#0a8a4b;color:white}
+.card{background:white;padding:14px;border-radius:10px;margin:8px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.btn{width:100%;padding:14px;background:#0a8a4b;color:white;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;margin:5px 0}
+.btn:disabled{background:gray}input,select{width:100%;padding:11px;margin:5px 0;border:1px solid #ccc;border-radius:6px}
+.seat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.seat{padding:10px;text-align:center;border-radius:6px;border:1px solid #0a8a4b;cursor:pointer}.seat.selected{background:#0a8a4b;color:white}.seat.sold{background:#d00;color:white;cursor:not-allowed}
+.orange{background:#ff7a00;color:white;padding:10px;border-radius:8px;font-weight:bold;text-align:center}
+.qrbox{text-align:center;padding:10px;border:2px dashed #0a8a4b;border-radius:10px}
+.valid{background:#0a8a4b;color:white;padding:15px;border-radius:10px;text-align:center;font-size:20px}
+.invalid{background:#d00;color:white;padding:15px;border-radius:10px;text-align:center}
+.small{font-size:11px;color:#666}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ddd;padding:5px}th{background:#0a8a4b;color:white}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="header"><h2 style="margin:0">🚌 SL Bus - One Link All Roles</h2><small id="roleInfo">Customer Mode - Book Ticket</small></div>
+<div class="nav">
+<button id="navCustomer" class="active" onclick="showSection('customer')">🎫 Book</button>
+<button onclick="showSection('driver')">🚌 Driver Scan</button>
+<button onclick="showSection('admin')">👑 Admin (You)</button>
+</div>
+
+<!-- CUSTOMER SECTION -->
+<div id="sec-customer">
+<div id="booking" class="card">
+<h3>Book Seat (25 seats) - Freetown → Any District</h3>
+From <select id="from"><option>Freetown</option></select> To <select id="to"></select> Date <input type="date" id="date">
+Name <input id="name" placeholder="Fatima Kamara"> Phone <input id="phone" placeholder="076123456">
+<div id="seats" class="seat-grid"></div>
+<div class="orange">Pay Orange Money Agent: 072039074<br>Amount: <span id="payAmount">--</span> Le</div>
+Txn ID <input id="txn" placeholder="OM78234910">
+<button class="btn" onclick="submitBooking()">Submit - Wait for Admin Approval</button>
+<p class="small">After submit, YOU (admin) approve in Admin tab. Ticket appears here.</p>
+</div>
+<div id="pending" class="card hidden" style="background:#fff3cd"><h3>⏳ Waiting Admin Approval</h3>Txn: <b id="pendingTxn"></b><br><button class="btn" onclick="checkApproval()">Check Now</button></div>
+<div id="ticket" class="card hidden"><h3 style="color:green">✅ APPROVED - TICKET</h3><div class="qrbox"><div id="ticketDetails"></div><canvas id="qrCanvas" width="200" height="200" style="border:1px solid #ccc"></canvas><p id="ticketId"></p><p class="small">Show QR to driver - Driver scans with normal camera</p></div><button class="btn" onclick="location.reload()">Book Another</button></div>
+</div>
+
+<!-- DRIVER SECTION - Cannot see Admin -->
+<div id="sec-driver" class="hidden">
+<div id="driverLogin" class="card" style="max-width:400px;margin:20px auto"><h2>🚌 DRIVER LOGIN</h2><p class="small">Driver CANNOT see Admin panel - Blocked! Admin sees all.</p>Username <input id="dUser" placeholder="driver1"> Password <input id="dPass" type="password" placeholder="driver123"><button class="btn" onclick="driverLogin()">Login - Scan QR</button><p id="driverMsg" style="color:red"></p><p class="small">Default: driver1 / driver123<br>Create drivers in Admin tab</p></div>
+<div id="driverPanel" class="hidden"><div class="card"><h3>📷 SCAN QR - Normal Camera (Infinix/Tecno works)</h3><div style="border:3px dashed #0a8a4b;border-radius:12px;padding:15px;text-align:center;background:#f0fff0"><button class="btn" onclick="openCameraScan()">📷 OPEN CAMERA SCAN (Normal Camera)</button><p>Or manual:</p><input id="manualId" placeholder="Ticket ID or last 6 digits"><input id="manualCode" placeholder="Secret code"><button class="btn" style="background:#0a5ad1" onclick="validateManual()">Validate</button></div><div id="scanResult" style="margin-top:10px"></div></div><div class="card"><h3>Passenger List - <span id="count"></span></h3><div id="passengerList"></div><button class="btn" onclick="loadPassengers()">Refresh</button><button class="btn" style="background:#555" onclick="driverLogout()">Logout Driver</button></div></div>
+</div>
+
+<!-- ADMIN SECTION - YOU SEE ALL -->
+<div id="sec-admin" class="hidden">
+<div id="adminLogin" class="card" style="max-width:400px;margin:20px auto"><h2>🔒 ADMIN LOGIN - YOU ONLY</h2><p class="small">First time: Set your password. Only you know! You see all - customers, drivers, income. Customer cannot see Admin, Driver cannot see Admin.</p><input type="password" id="adminPass" placeholder="Set/Enter Admin Password" style="width:100%"><br><br><button class="btn" onclick="adminLogin()">Login as Admin - See All</button><p id="adminMsg" style="color:red"></p></div>
+<div id="adminPanel" class="hidden">
+<div class="card" style="background:#111;color:white"><b>👑 ADMIN - YOU SEE ALL</b> <span id="income" style="float:right"></span><button onclick="adminLogout()" style="float:right;margin-left:10px">Logout</button></div>
+<div style="display:flex;flex-wrap:wrap"><div class="card" style="flex:1;min-width:280px"><h3>💰 Pending - Approve</h3>Check Orange Money 072039074 app<div id="pendingList"></div></div><div class="card" style="flex:1;min-width:280px"><h3>🚌 Add Route - Freetown to ANY District</h3>To <input id="rTo" placeholder="Kailahun, Kambia, Moyamba, etc"> Price <input id="rPrice" type="number" placeholder="120000"> Time <input id="rTime" type="time" value="07:30"> Bus <input id="rBus" placeholder="B-209"><button class="btn" onclick="addRoute()">+ Add New Route - Customer sees instantly</button><div id="routeList"></div></div></div>
+<div class="card"><h3>📋 All Bookings - Live Boarding (You see all buses)</h3><div style="overflow:auto"><table id="bookingTable"><thead><tr><th>Ticket</th><th>Name</th><th>Route</th><th>Seat Bus</th><th>Price</th><th>Txn</th><th>Status</th><th>Boarded</th></tr></thead><tbody></tbody></table></div><button class="btn" style="background:#0a5ad1" onclick="window.print()">Print List for Driver</button></div>
+<div class="card"><h3>👤 Driver Accounts - You Control - Driver Cannot See Admin</h3>User <input id="adUser" placeholder="driver1"> Pass <input id="adPass" placeholder="driver123"> Bus <input id="adBus" placeholder="B-204"><button class="btn" onclick="addDriver()">Create Driver</button><div id="driverList"></div></div>
+</div>
+</div>
+
+<script>
+// DATA
+let routes=JSON.parse(localStorage.getItem('sl_routes')||'null')||[
+{from:'Freetown',to:'Bo',price:120000,time:'07:30 AM',bus:'B-204'},
+{from:'Freetown',to:'Kono',price:150000,time:'08:00 AM',bus:'B-205'},
+{from:'Freetown',to:'Makeni',price:100000,time:'07:00 AM',bus:'B-206'},
+{from:'Freetown',to:'Kenema',price:130000,time:'08:30 AM',bus:'B-207'},
+{from:'Freetown',to:'Port Loko',price:60000,time:'09:00 AM',bus:'B-208'}
+];
+localStorage.setItem('sl_routes',JSON.stringify(routes));
+let bookings=JSON.parse(localStorage.getItem('sl_bookings')||'[]');
+let currentDriver=null;
+let isAdmin=false;
+
+function showSection(sec){
+document.getElementById('sec-customer').classList.add('hidden');
+document.getElementById('sec-driver').classList.add('hidden');
+document.getElementById('sec-admin').classList.add('hidden');
+document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
+document.getElementById('sec-'+sec).classList.remove('hidden');
+if(sec==='customer'){document.getElementById('navCustomer').classList.add('active');document.getElementById('roleInfo').textContent='Customer Mode - Book Ticket - Cannot see Admin/Driver panels';}
+else if(sec==='driver'){document.getElementById('roleInfo').textContent='Driver Mode - Scan QR - Cannot see Admin (Blocked)';if(currentDriver)loadPassengers();}
+else if(sec==='admin'){document.getElementById('roleInfo').textContent='Admin Mode - YOU SEE ALL - Customers, Drivers, Income';if(isAdmin)loadAdminAll();}
+}
+
+// CUSTOMER FUNCTIONS
+function drawQR(c,t){let ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,200,200);ctx.fillStyle='#000';let h=0;for(let i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))%1000;for(let y=0;y<20;y++)for(let x=0;x<20;x++)if((x*y+h)%7<3)ctx.fillRect(x*10,y*10,9,9);ctx.fillStyle='#0a8a4b';ctx.fillRect(60,85,80,22);ctx.fillStyle='white';ctx.font='12px Arial';ctx.fillText(t.slice(-6),75,100);}
+function loadTo(){let sel=document.getElementById('to');sel.innerHTML='';routes.forEach(r=>{let o=document.createElement('option');o.value=r.to;o.textContent=r.to+' - '+r.price+' Le - '+r.time+' Bus '+r.bus;sel.appendChild(o);});updateInfo();}
+function updateInfo(){let f=document.getElementById('from').value,t=document.getElementById('to').value;let r=routes.find(x=>x.from===f&&x.to===t);if(r){document.getElementById('payAmount').textContent=r.price.toLocaleString();loadSeats(r);}}
+function loadSeats(route){bookings=JSON.parse(localStorage.getItem('sl_bookings')||'[]');let cont=document.getElementById('seats');cont.innerHTML='';let rb=bookings.filter(b=>b.from===route.from&&b.to===route.to&&b.date===document.getElementById('date').value);for(let i=1;i<=25;i++){let sid=i<=20?'A'+i:'B'+(i-20);let sold=rb.some(b=>b.seat===sid&&b.status!=='rejected');let d=document.createElement('div');d.className='seat'+(s
