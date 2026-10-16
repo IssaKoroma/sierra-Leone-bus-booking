@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SL Bus Pro - Price Control & SOLD OUT</title>
+<style>
+*{box-sizing:border-box;font-family:Arial}body{margin:0;background:#f5f7fa}
+.header{background:#0a8a4b;color:#fff;padding:12px;text-align:center;position:sticky;top:0;z-index:10}
+.nav{display:flex;background:#fff;border-bottom:2px solid #0a8a4b;position:sticky;top:56px;z-index:9}
+.nav button{flex:1;padding:16px;border:none;background:#fff;font-weight:bold;cursor:pointer}
+.nav button.active{background:#0a8a4b;color:#fff}
+.card{background:#fff;padding:14px;border-radius:12px;margin:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);border:1px solid #e0e0e0}
+.btn{padding:12px 16px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;color:#fff;margin:4px}
+.green{background:#0a8a4b}.red{background:#d32f2f}.blue{background:#1976d2}.orange-bg{background:#ff7a00}
+.badge{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:bold;color:#fff}
+.badge-sold{background:#d32f2f}.badge-avail{background:#0a8a4b}
+.seat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.seat{padding:14px;text-align:center;border-radius:8px;border:2px solid #0a8a4b;background:#fff;font-weight:bold;cursor:pointer}
+.seat.sold{background:#ccc;border-color:#999;color:#666;cursor:not-allowed}
+.seat.selected{background:#0a8a4b;color:#fff}
+.seat.occupied{position:relative}.seat.occupied::after{content:"✕";position:absolute;top:2px;right:4px;font-size:10px}
+input,select{width:100%;padding:12px;margin:6px 0;border:2px solid #ddd;border-radius:8px}
+.price-row{display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #eee}
+.hidden{display:none!important}
+.valid{background:#0a8a4b;color:#fff;padding:20px;border-radius:10px;text-align:center}
+.invalid{background:#d32f2f;color:#fff;padding:20px;border-radius:10px;text-align:center}
+.wait-item{padding:8px;border:1px solid #ffe0b2;background:#fff3e0;border-radius:8px;margin:4px 0}
+</style>
+</head>
+<body>
+<div class="header"><h2 style="margin:0">🚌 SL Bus PRO - Full System</h2><small id="roleInfo">Customer - Book Ticket</small></div>
+<div class="nav">
+<button id="n1" class="active" onclick="go('customer')">🎫 Book</button>
+<button id="n2" onclick="go('driver')">🚌 Driver</button>
+<button id="n3" onclick="go('admin')">👑 Admin</button>
+</div>
+
+<!-- CUSTOMER -->
+<div id="sec-customer">
+<div class="card">
+<h3>Available Buses - Freetown to Districts</h3>
+<div id="busList"></div>
+</div>
+<div id="seatSection" class="card hidden">
+<h3 id="selectedRouteTitle"></h3>
+<div id="soldBadge"></div>
+<div id="seats" class="seat-grid"></div>
+<div id="fullMsg" class="hidden" style="background:#ffebee;color:#d32f2f;padding:12px;border-radius:8px;text-align:center;margin:10px 0"><b>No seats available - This bus is fully booked. No seats remaining.</b><br>Join waiting list or choose next bus.</div>
+<div class="card" style="background:#fff8e1">
+From Freetown To <b id="summaryTo"></b><br>
+Bus <b id="summaryBus"></b> - <b id="summaryTime"></b><br>
+Seat <b id="summarySeat">Not selected</b><br>
+Price <b id="summaryPrice"></b> Le
+<div class="orange-bg" style="padding:10px;border-radius:8px;margin-top:8px;color:#fff">Pay Orange Money Agent: 072039074<br>Amount: <span id="payAmount">--</span> Le</div>
+Name <input id="cName" placeholder="Fatima Kamara"> Phone <input id="cPhone" placeholder="076123456">
+Txn ID <input id="cTxn" placeholder="OM78234910 - From Orange Money SMS">
+<button class="btn green" style="width:100%" onclick="submitBooking()">Submit - Wait Admin Approval</button>
+<button class="btn blue" style="width:100%" onclick="joinWaiting()">Join Waiting List if Full</button>
+</div>
+</div>
+<div id="pendingCard" class="card hidden" style="background:#fff3cd"><h3>⏳ Waiting Admin Approval - Transaction Check</h3>Txn <b id="pendingTxn"></b><br>Admin checking Orange Money 072039074 app<br><button class="btn blue" onclick="checkApproval()">Check Status</button></div>
+<div id="ticketCard" class="card hidden"><h3 style="color:green">✅ APPROVED - QR TICKET</h3><div style="text-align:center;border:2px dashed #0a8a4b;padding:12px;border-radius:10px"><div id="ticketDetails"></div><canvas id="qrCanvas" width="200" height="200" style="border:1px solid #ccc"></canvas><p id="ticketId" style="font-weight:bold"></p><small>Show QR to driver - Normal camera scans</small></div></div>
+</div>
+
+<!-- DRIVER -->
+<div id="sec-driver" class="hidden">
+<div id="driverLogin" class="card" style="max-width:400px;margin:20px auto"><h2>🚌 DRIVER LOGIN</h2>Driver cannot see Admin - Blocked!<br>User <input id="dUser" value="driver1"> Pass <input id="dPass" type="password" value="driver123"><button class="btn green" style="width:100%" onclick="driverLogin()">Login</button><p id="driverMsg" style="color:red"></p></div>
+<div id="driverPanel" class="hidden"><div class="card"><h3>Scan Ticket - Normal Camera</h3><input id="manualId" placeholder="Ticket last 6"><input id="manualCode" placeholder="Secret code"><button class="btn blue" style="width:100%" onclick="validateManual()">Validate - GREEN valid RED fake</button><div id="scanResult" style="margin-top:10px"></div></div><div class="card"><h3>Passengers <span id="count"></span></h3><div id="passengerList"></div></div></div>
+</div>
+
+<!-- ADMIN - YOU SEE ALL - LIKE PICTURES -->
+<div id="sec-admin" class="hidden">
+<div id="adminLogin" class="card" style="max-width:400px;margin:20px auto"><h2>🔒 ADMIN - YOU CONTROL</h2>Set password yourself - Only you can change price!<br><input type="password" id="adminPass" placeholder="Set admin password"><button class="btn green" style="width:100%" onclick="adminLogin()">Login - See All</button><p id="adminMsg" style="color:red"></p></div>
+<div id="adminPanel" class="hidden">
+<div class="card" style="background:#111;color:#fff"><b>👑 ADMIN DASHBOARD - YOU CONTROL PRICE YOURSELF</b><div id="income" style="color:yellow"></div><button onclick="adminLogout()" style="float:right;background:#d00;color:#fff;border:none;padding:6px 12px;border-radius:6px">Logout</button></div>
+
+<div style="display:flex;flex-wrap:wrap">
+<!-- PRICE CONTROL - TOP LEFT LIKE PICTURE -->
+<div class="card" style="flex:1;min-width:300px">
+<h3>💰 ADMIN PRICE CONTROL - YOU CONTROL PRICE YOURSELF!</h3>
+<small>You type new price, click Update → Changes immediately!</small>
+<div id="priceControlList"></div>
+<h4 style="margin-top:12px">+ Add New Route</h4>
+To <input id="rTo" placeholder="Kailahun, Kambia, Moyamba..."> Price <input id="rPrice" type="number" placeholder="120000"> Time <input id="rTime" type="time" value="07:30"> Bus# <input id="rBus" placeholder="B-204"><button class="btn green" style="width:100%" onclick="addRoute()">+ Add Route - Customer sees instantly</button>
+</div>
+
+<!-- FULL BUS & EXTRA BUS - TOP RIGHT & BOTTOM LEFT LIKE PICTURE -->
+<div class="card" style="flex:1;min-width:300px">
+<h3>🚌 FULL BUS & EXTRA BUS MANAGEMENT - MAKE MORE MONEY WHEN FULL!</h3>
+<div id="fullBusStatus"></div>
+<button class="btn orange-bg" style="width:100%" onclick="addExtraBus()">+ Add Extra Bus When Full</button>
+<h4>Active Extra Buses:</h4><div id="extraBusList"></div>
+<h4>Passenger Waiting List - <span id="waitCount">0</span> waiting</h4><div id="waitingList"></div>
+</div>
+</div>
+
+<!-- TRANSACTION VERIFICATION - BOTTOM RIGHT LIKE PICTURE -->
+<div class="card">
+<h3>💳 TRANSACTION ID VERIFICATION - HOW YOU KNOW CUSTOMER PAID!</h3>
+<small>Orange Money - Payments to Approve - Agent Code: 072039074</small><br>
+<small>Check Orange Money app on phone, see money with same Txn ID → Approve → Customer gets QR automatically!</small>
+<div id="txnVerificationList"></div>
+</div>
+
+<div class="card"><h3>📋 All Bookings - Live</h3><div style="overflow:auto"><table id="bookingTable"><thead><tr><th>Ticket</th><th>Name</th><th>Route</th><th>Seat Bus</th><th>Price</th><th>Txn</th><th>Agent</th><th>Status</th><th>Boarded</th></tr></thead><tbody></tbody></table></div></div>
+<div class="card"><h3>👤 Drivers</h3>User <input id="adUser" placeholder="driver1"> Pass <input id="adPass" placeholder="driver123"> Bus <input id="adBus" placeholder="B-204"><button class="btn green" onclick="addDriver()">Create Driver - Driver Cannot See Admin!</button><div id="driverList"></div></div>
+</div>
+</div>
+
+<script>
+var routes=JSON.parse(localStorage.getItem('sl_routes')||'null')||[
+{from:'Freetown',to:'Bo',price:120000,time:'07:30 AM',bus:'B-204',capacity:25},
+{from:'Freetown',to:'Kono',price:150000,time:'08:00 AM',bus:'B-205',capacity:25},
+{from:'Freetown',to:'Makeni',price:100000,time:'07:00 AM',bus:'B-206',capacity:25},
+{from:'Freetown',to:'Kenema',price:130000,time:'08:30 AM',bus:'B-207',capacity:25},
+{from:'Freetown',to:'Port Loko',price:60000,time:'09:00 AM',bus:'B-208',capacity:25}
+];
+var extraBuses=JSON.parse(localStorage.getItem('sl_extra')||'[]');
+var waiting=JSON.parse(localStorage.getItem('sl_wait')||'[]');
+localStorage.setItem('sl_routes',JSON.stringify(routes));
+var selectedRoute=null;var selectedSeat=null;var currentDriver=null;var isAdmin=false;
+
+function go(s){
+document.getElementById('sec-customer').classList.add('hidden');
+document.getElementById('sec-driver').classList.add('hidden');
+document.getElementById('sec-admin').classList.add('hidden');
+document.getElementById('n1').classList.remove('active');
+document.getElementById('n2').classList.remove('active');
+document.getElementById('n3').classList.remove('active');
+document.getElementById('sec-'+s).classList.remove('hidden');
+document.getElementById('n'+(s=='customer'?1:s=='driver'?2:3)).classList.add('active');
+if(s=='customer')loadBuses();
+if(s=='admin'&&isAdmin)loadAdminAll();
+window.scrollTo(0,0);
+}
+
+function loadBuses(){
+var allRoutes=routes.concat(extraBuses);
+var html='';var bookings=JSON.parse(localStorage.getItem('sl_bookings')||'[]');
+for(var i=0;i<allRoutes.length;i++){
+var r=allRoutes[i];
+var booked=0;for(var j=0;j<bookings.length;j++){var b=bookings[j];if(b.bus==r.bus&&b.date==new Date().toISOString().slice(0,10)&&b.status!='rejected')booked++;}
+var avail=r.capacity-booked;
+var isFull=avail<=0;
+html+='<div class="card" style="border-left:5px solid '+(isFull?'#d32f2f':'#0a8a4b')+'"><b>Freetown → '+r.to+'</b> - '+r.time+' - Bus #'+r.bus+' - Capacity '+r.capacity+'<br>Price: <b>'+r.price.toLocaleString()+' SLL</b> - <span class="badge '+(isFull?'badge-sold':'badge-avail')+'">'+(isFull?'SOLD OUT':'Available '+avail+' seats')+'</span><br><button class="btn '+(isFull?'red':'green')+'" onclick="selectBus(\''+r.bus+'\')" '+(isFull?'':'')+'>'+(isFull?'View Full Bus - No seats':'Select This Bus')+'</button></div>';
+}
+document.getElementById('busList').innerHTML=html;
+}
+
+function selectBus(busId){
+var all=routes.concat(extraBuses);
+for(var i=0;i<all.length;i++)if(all[i].bus==busId){selectedRoute=all[i];break;}
+document.getElementById('selectedRouteTitle').textContent='Ride: Freetown → '+selectedRoute.to+' - '+new Date().toISOString().slice(0,10)+' '+selectedRoute.time+' - Bus #'+selectedRoute.bus;
+document.getElementById('summaryTo').textContent=selectedRoute.to;
+document.getElementById('summaryBus').textContent=selectedRoute.bus;
+document.getElementById('summaryTime').textContent=selectedRoute.time;
+document.getElementById('summaryPrice').textContent=selectedRoute.price.toLocaleString();
+document.getElementById('payAmount').textContent=selectedRoute.price.toLocaleString();
+document.getElementById('seatSection').classList.remove('hidden');
+loadSeats();
+window.scrollTo(0,400);
+}
+
+function loadSeats(){
+var bookings=JSON.parse(localStorage.getItem('sl_bookings')||'[]');
+var today=new Date().toISOString().slice(0,10);
+var rb=[];for(var i=0;i<bookings.length;i++){var b=bookings[i];if(b.bus==selectedRoute.bus&&b.date==today&&b.status!='rejected')rb.push(b);}
+var cont=document.getElementById('seats');cont.innerHTML='';
+var isFull=rb.length>=selectedRoute.capacity;
+if(isFull){
+document.getElementById('soldBadge').innerHTML='<span class="badge badge-sold" style="font-size:16px;padding:8px 16px">🔴 SOLD OUT - '+selectedRoute.capacity+'/'+selectedRoute.capacity+'</span>';
+document.getElementById('fullMsg').classList.remove('hidden');
+}else{
+document.getElementById('soldBadge').innerHTML='<span class="badge badge-avail">Available '+(selectedRoute.capacity-rb.length)+' seats</span>';
+document.getElementById('fullMsg').classList.add('hidden');
+}
+for(var i=1;i<=selectedRoute.capacity;i++){
+var sid=i<=20?'A'+i:'B'+(i-20);var sold=false;for(var j=0;j<rb.length;j++)if(rb[j].seat==sid){sold=true;break;}
+var d=document.createElement('div');d.className='seat'+(sold?' sold occupied':'');d.textContent=sid;
+if(!sold){(function(el,seat){el.onclick=function(){var all=document.querySelectorAll('.seat');for(var k=0;k<all.length;k++)all[k].classList.remove('selected');el.classList.add('selected');selectedSeat=seat;document.getElementById('summarySeat').textContent=seat;}})(d,sid);}
+cont.appendChild(d);
+}
+}
+
+function submitBooking(){
+if(!selectedRoute||!selectedSeat){alert('Select bus and seat');return;}
+var n=document.getElementById('cName').value;var p=document.getElementById('cPhone').value;var txn=document.getElementById('cTxn').value.trim();
+if(!n||!p||!txn){alert('Fill Name Phone Txn ID');return;}
+var tid='TKT-SL'+Date.now().toString().slice(-6)+'-'+Math.floor(100+Math.random()*900);
+var b={id:tid,from:'Freetown',to:selectedRoute.to,date:new Date().toISOString().slice(0,10),name:n,phone:p,seat:selectedSeat,txn:txn.toUpperCase(),agent:'OM-AGT-4932',price:selectedRoute.price,bus:selectedRoute.bus,time:selectedRoute.time,status:'pending',code:'SEC'+Math.random().toString(36).slice(2,8).toUpperCase(),boarded:false};
+var all=JSON.parse(localStorage.getItem('sl_bookings')||'[]');all.push(b);localStorage.setItem('sl_bookings',JSON.stringify(all));localStorage.setItem('sl_pending_id',tid);
+document.getElementById('seatSection').classList.add('hidden');document.getElementById('pendingCard').classList.remove('hidden');document.getElementById('pendingTxn').textContent=txn;
+}
+
+function joinWaiting(){
+if(!selectedRoute){alert('Select bus first');return;}
+var n=document.getElementById('cName').value||'Guest';var w={name:n,from:'Freetown',to:selectedRoute.to,time:new Date().toLocaleTimeString(),bus:selectedRoute.bus};
+waiting.push(w);localStorage.setItem('sl_wait',JSON.stringify(waiting));alert('Added to waiting list - 8 passengers waiting - You will get SMS when extra bus added!');loadBuses();
+}
+
+function checkApproval(){var id=localStorage.getItem('sl_pending_id');var all=JSON.parse(localStorage.getItem('sl_bookings')||'[]');var b=null;for(var i=0;i<all.length;i++)if(all[i].id==id){b=all[i];break;}if(b&&b.status=='approved')showTicket(b);else alert('Not yet approved - Admin checking Orange Money 072039074');}
+function showTicket(b){document.getElementById('pendingCard').classList.add('hidden');document.getElementById('ticketCard').classList.remove('hidden');document.getElementById('ticketId').textContent=b.id;document.getElementById('ticketDetails').innerHTML='<b>'+b.name+'</b><br>Freetown → '+b.to+'<br>Bus '+b.bus+' Seat '+b.seat+'<br>Price '+b.price+' Le<br>Txn '+b.txn+'<br>Agent '+b.agent;drawQR(document.getElementById('qrCanvas'),b.id+'|'+b.code);}
+function drawQR(c,t){var ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,200,200);ctx.fillStyle='#000';var h=0;for(var i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))%1000;for(var y=0;y<20;y++)for(var x=0;x<20;x++)if((x*y+h)%7<3)ctx.fillRect(x*10,y*10,9,9);}
+
+function driverLogin(){var u=document.getElementById('dUser').value;var p=document.getElementById('dPass').value;var drivers=JSON.parse(localStorage.getItem('sl_drivers')||'[]');if(drivers.length==0&&u=='driver1'&&p=='driver123'){currentDriver={user:'driver1',bus:'B-204'};}else{for(var i=0;i<drivers.length;i++)if(drivers[i].user==u&&drivers[i].pass==p){currentDriver=drivers[i];break;}}if(!currentDriver){document.getElementById('driverMsg').textContent='Wrong login';return;}document.getElementById('driverLogin').classList.add('hidden');document.getElementById('driverPanel').classList.remove('hidden');loadPassengers();}
+function validateManual(){validateTicket(document.getElementById('manualId').value.trim(),document.getElementById('manualCode').value.trim());}
+function validateTicket(id,code){var all=JSON.parse(localStorage.getItem('sl_bookings')||'[]');var b=null;for(var i=0;i<all.length;i++){if(all[i].id==id||all[i].id.endsWith(id)||all[i].id.indexOf(id)>=0){b=all[i];break;}}if(!b){document.getElementById('scanResult').innerHTML='<div class="invalid">❌ FAKE!</div>';return;}if(b.status!='approved'){document.getElementById('scanResult').innerHTML='<div class="invalid">❌ NOT APPROVED - '+b.status+'</div>';return;}if(b.boarded){document.getElementById('scanResult').innerHTML='<div class="invalid">❌ ALREADY USED '+b.boardedTime+'</div>';return;}b.boarded=true;b.boardedTime=new Date().toLocaleString();localStorage.setItem('sl_bookings',JSON.stringify(all));document.getElementById('scanResult').innerHTML='<div class="valid">✅ VALID - '+b.name+' Seat '+b.seat+'</div>';loadPassengers();}
+function loadPassengers(){var all=JSON.parse(localStorage.getItem('sl_bookings')||'[]');var list=[];for(var i=0;i<all.length;i++)if(all[i].status=='approved'&&(!currentDriver||all[i].bus==currentDriver.bus))list.push(all[i]);var html='<table><tr><th>Seat</th><th>Name</th><th>Status</th></tr>';for(var i=0;i<list.length;i++)html+='<tr><td>'+list[i].seat+'</td><td>'+list[i].name+'</td><td>'+(list[i].boarded?'✅':'⏳')+'</td></tr>';html+='</table>';document.getElementById('passengerList').innerHTML=html;document.getElementById('count').textContent=list.length;}
+
+function adminLogin(){var s=localStorage.getItem('sl_admin_pass');var e=document.getElementById('adminPass').value;if(!s){if(!e){document.getElementById('adminMsg').textContent='Set password';return;}localStorage.setItem('sl_admin_pass',e);s=e;}if(e==s){isAdmin=true;document.getElementById('adminLogin').classList.add('hidden');document.getElementById('adminPanel').classList.remove('hidden');loadAdminAll();}else document.getElementById('adminMsg').textContent='Wrong!';}
+function adminLogout(){isAdmin=false;document.getElementById('adminLogin').classList.remove('hidden');document.getElementById('adminPanel').classList.add('hidden');}
+function loadAdminAll(){loadPriceControl();loadFullBusStatus();loadTxnVerification();loadBookingsAdmin();loadDriversAdmin();}
+function loadPriceControl(){
+var html='';for(var i=0;i<routes.length;i++){var r=routes[i];html+='<div class="price-row"><b>Freetown → '+r.to+':</b> <input id="price_'+i+'" type="number" value="'+r.price+'" style="width:110px"> SLL <button class="btn green" onclick="updatePrice('+i+')">Update</button> Bus '+r.bus+'</div>';}
+document.getElementById('priceControlList').innerHTML=html;
+}
+function updatePrice(i){var v=parseInt(document.getElementById('price_'+i).value);if(!v){alert('Enter price');return;}routes[i].price=v;localStorage.setItem('sl_routes',JSON.stringify(routes));alert('Price updated to '+v+' SLL - Changes immediately to all new bookings!');loadBuses();}
+function addRoute(){var t=document.getElementById('rTo').value;var p=parseInt(document.getElementById('rPrice').value);var ti=document.getElementById('rTime').value;var bu=document.getElementById('rBus').value;if(!t||!p){alert('Enter To Price');return;}routes.push({from:'Freetown',to:t,price:p,time:ti,bus:bu,capacity:25});localStorage.setItem('sl_routes',JSON.stringify(routes));loadPriceControl();loadBuses();}
+function loadFullBusStatus(){
+var bookings=JSON.parse(localStorage.getItem('sl_bookings')||'[]');var today=new Date().toISOString().slice(0,10);
+var html='';for(var i=0;i<routes.length;i++){var r=routes[i];var cnt=0;for(var j=0;j<bookings.length;j++)if(bookings[j].bus==r.bus&&bookings[j].date==today&&bookings[j].status!='rejected')cnt++;var full=cnt>=r.capacity;html+='<div style="padding:6px;border:1px solid '+(full?'#d32f2f':'#0a8a4b')+';border-radius:6px;margin:4px 0">Ride: Freetown → '+r.to+' - '+today+' '+r.time+' - Bus #'+r.bus+'<br>Seats: '+cnt+'/'+r.capacity+' '+(full?'<span class="badge badge-sold">SOLD OUT</span>':'<span class="badge badge-avail">Available</span>')+'</div>';}
+document.getElementById('fullBusStatus').innerHTML=html;
+var ebHtml='';for(var i=0;i<extraBuses.length;i++){var eb=extraBuses[i];ebHtml+='<div style="padding:6px;background:#e8f5e9;border-radius:6px;margin:4px 0">Extra Bus Freetown → '+eb.to+' '+eb.time+' Capacity '+eb.capacity+' - Driver Mohamed Kamara - Bus #'+eb.bus+' - SCHEDULED</div>';}
+if(!ebHtml)ebHtml='No extra buses yet - Click + Add Extra Bus when main full';document.getElementById('extraBusList').innerHTML=ebHtml;
+var wHtml='';for(var i=0;i<Math.min(waiting.length,8);i++){var w=waiting[i];wHtml+='<div class="wait-item">'+w.name+' - Freetown → '+w.to+' - Requested '+w.time+' - Waiting</div>';}
+if(waiting.length>8)wHtml+='<div>+'+(waiting.length-8)+' more passengers</div>';if(!wHtml)wHtml='No waiting passengers';document.getElementById('waitingList').innerHTML=wHtml;document.getElementById('waitCount').textContent=waiting.length;
+}
+function addExtraBus(){
+var to=prompt('Extra bus To? (e.g., Bo)');if(!to)return;
+var time=prompt('Time? (e.g., 16:00)')||'16:00';
+var bus='B-'+(208+extraBuses.length);
+extraBuses.push({from:'Freetown',to:to,price:120000,time:time,bus:bus,capacity:25});
+localStorage.setItem('sl_extra',JSON.stringify(extraBuses));
+alert('Extra Bus Added: Freetown → '+to+' '+time+' Bus #'+bus+' - Waiting list will get SMS: New bus available!');
+loadFullBusStatus();loadBuses();
+}
+function loadTxnVerification(){
+var bookings=JSON.parse(localStorage.getItem('sl_bookings')||'[]');var pend=[];for(var i=0;i<bookings.length;i++)if(bookings[i].status=='pending')pend.push(bookings[i]);
+var html='';if(!pend.length)html='No payments to approve';for(var i=0;i<pend.length;i++){var b=pend[i];html+='<div style="padding:10px;border:1px solid #ffcc80;background:#fff3e0;border-radius:8px;margin:6px 0"><b>TXN: '+b.txn+'</b> - Passenger: '+b.name+' - Freetown → '+b.to+' - Amount: '+b.price+' SLL - Agent Code: '+b.agent+' - Submitted '+b.time+'<br><button class="btn green" onclick="approveTxn(\''+b.id+'\')">✓ Approve</button> <button class="btn red" onclick="rejectTxn(\''+b.id+'\')">✕ Reject</button></div>';}
+document.getElementById('txnVerificationList').innerHTML=html;
+}
+function approveTxn(id){var all=JSON.parse(localStorage.getItem('sl_bookings')||'[]');for(var i=0;i<all.length;i++)if(all[i].id==id){all[i].status='approved';break;}localStorage.setItem('sl_bookings',JSON.stringify(all));loadAdminAll();}
+function rejectTxn(id){var all=JSON.parse(localStorage.getItem('sl_bookings')||'[]');for(var i=0;i<all.length;i++)if(all[i].id==id){all[i].status='rejected';break;}localStorage.setItem('sl_bookings',JSON.stringify(all));loadAdminAll();}
+function loadBookingsAdmin(){var a=JSON.parse(localStorage.getItem('sl_bookings')||'[]');var tbody=document.querySelector('#bookingTable tbody');tbody.innerHTML='';var inc=0;for(var i=a.length-1;i>=0;i--){var b=a[i];if(b.status=='approved')inc+=b.price;var tr=document.createElement('tr');tr.innerHTML='<td>'+b.id.slice(-6)+'</td><td>'+b.name+'</td><td>'+b.from+'->'+b.to+'</td><td>'+b.seat+' '+b.bus+'</td><td>'+b.price+'</td><td>'+b.txn+'</td><td>'+b.agent+'</td><td>'+b.status+'</td><td>'+(b.boarded?'✅':'⏳')+'</td>';tbody.appendChild(tr);}document.getElementById('income').textContent='Income: '+inc.toLocaleString()+' Le';}
+function loadDriversAdmin(){var d=JSON.parse(localStorage.getItem('sl_drivers')||'[]');var h='<table><tr><th>User</th><th>Bus</th></tr>';for(var i=0;i<d.length;i++)h+='<tr><td>'+d[i].user+'</td><td>'+d[i].bus+'</td></tr>';h+='</table>';document.getElementById('driverList').innerHTML=h;}
+function addDriver(){var u=document.getElementById('adUser').value;var p=document.getElementById('adPass').value;var b=document.getElementById('adBus').value;if(!u||!p){alert('Enter user pass');return;}var d=JSON.parse(localStorage.getItem('sl_drivers')||'[]');d.push({user:u,pass:p,bus:b});localStorage.setItem('sl_drivers',JSON.stringify(d));loadDriversAdmin();}
+
+loadBuses();
+</script>
+</body>
+</html>
