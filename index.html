@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SL Transport Pay V13</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+*{box-sizing:border-box;font-family:Arial}body{margin:0;background:#f0f4f2;padding-bottom:20px}
+.header{background:#0a8a4b;color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:20}
+.topnav{display:flex;background:#fff;border-bottom:1px solid #ddd;position:sticky;top:56px;z-index:19}
+.topnav button{flex:1;padding:14px;border:none;background:#fff;font-weight:700;cursor:pointer}
+.topnav button.active{color:#0a8a4b;border-bottom:3px solid #0a8a4b}
+.time-tabs{display:flex;gap:8px;margin:12px 0}
+.time-tabs button{flex:1;padding:14px 8px;border-radius:12px;border:2px solid #ddd;background:#fff;font-weight:800;font-size:14px;cursor:pointer}
+.time-tabs button.active{border-color:#0a8a4b;background:#0a8a4b;color:#fff}
+.card{background:#fff;border-radius:16px;margin:12px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.bus-card{display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid #e8e8e8;border-radius:14px;margin:10px 0}
+.bus-price{color:#0a8a4b;font-weight:800;font-size:18px}
+.btn{padding:12px 18px;border:none;border-radius:10px;font-weight:700;cursor:pointer;color:#fff}
+.green{background:#0a8a4b}.red{background:#d32f2f}.blue{background:#1976d2}.orange{background:#ff7a00}
+.btn:disabled{background:#aaa;cursor:not-allowed}
+.seat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}
+.seat{padding:14px 5px;text-align:center;border-radius:12px;border:2px solid #ddd;background:#e9ecef;font-weight:700;cursor:pointer;transition:0.2s}
+.seat.sold{background:#d32f2f;color:#fff;border-color:#d32f2f;cursor:not-allowed}
+.seat.selected{background:#0a8a4b;color:#fff;border-color:#0a8a4b;transform:scale(1.05)}
+.legend{display:flex;gap:8px;margin:12px 0;justify-content:center;flex-wrap:wrap}
+.legend span{padding:8px 14px;border-radius:8px;font-size:12px;font-weight:800}
+.l-sel{background:#0a8a4b;color:#fff;border:2px solid #0a8a4b}
+.l-avail{background:#e9ecef;border:2px solid #ddd;color:#333}
+.l-occ{background:#d32f2f;color:#fff;border:2px solid #d32f2f}
+input,textarea,select{width:100%;padding:13px;margin:6px 0;border:2px solid #ddd;border-radius:12px;font-size:15px}
+textarea{height:90px}
+.hidden{display:none!important}
+.valid{background:#0a8a4b;color:#fff;padding:20px;border-radius:14px;text-align:center}
+.invalid{background:#d32f2f;color:#fff;padding:20px;border-radius:14px;text-align:center}
+.check{width:90px;height:90px;background:#0a8a4b;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto;color:#fff;font-size:50px}
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;color:#fff}
+.badge-sold{background:#d32f2f}.badge-avail{background:#0a8a4b}
+table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #ddd;padding:6px;font-size:13px;text-align:left}
+th{background:#0a8a4b;color:#fff}
+</style>
+</head>
+<body>
+<div class="header"><div>🇸🇱</div><div><h2 style="margin:0">SL Transport Pay</h2><small>Morning Afternoon Evening Bus V13</small></div></div>
+<div class="topnav"><button id="n1" class="active" onclick="go('customer')">🎫 Book</button><button id="n2" onclick="go('driver')">🚌 Driver</button><button id="n3" onclick="go('admin')">👑 Admin</button></div>
+
+<div id="sec-customer">
+<div class="card">
+<h3 style="margin:0">When you want travel?</h3>
+<div class="time-tabs">
+<button id="tMorning" class="active" onclick="setTimeSlot('morning')">🌅<br>Morning<br><small>6AM-11AM</small></button>
+<button id="tAfternoon" onclick="setTimeSlot('afternoon')">☀️<br>Afternoon<br><small>12PM-4PM</small></button>
+<button id="tEvening" onclick="setTimeSlot('evening')">🌙<br>Evening<br><small>5PM-9PM</small></button>
+</div>
+<div style="background:#e8f5e9;padding:10px;border-radius:8px;text-align:center"><b id="currentSlotText">🌅 Morning Buses - Today</b><br><small>Seats reset tomorrow = New seats free again!</small></div>
+<h3>Bus List - <span id="slotTitle">Morning</span></h3><div id="busList"></div>
+</div>
+
+<div id="seatSection" class="card hidden">
+<h3><span id="seatSlotIcon">🌅</span> <span id="seatSlotName">Morning</span> - Select Seat</h3><small id="seatSub"></small>
+<div class="seat-grid" id="seats"></div>
+<div class="legend">
+<span class="l-sel">🟩 Selected - You clicked</span>
+<span class="l-avail">⬜ Available - Free to book</span>
+<span class="l-occ">🟥 Occupied - Already sold</span>
+</div>
+<div style="margin:10px 0;padding:10px;background:#f8faf9;border-radius:10px">
+Bus: <b id="sumBus">-</b> | To: <b id="sumTo">-</b> | Time: <b id="sumTime">-</b><br>
+Seat: <b id="sumSeat" style="color:#d32f2f">NOT SELECTED</b> <span id="soldBadge"></span> | Price <b id="sumPrice" style="color:#0a8a4b"></b><br>
+<small>This seat is ONLY for <b id="slotOnlyText">Morning</b> - Afternoon/Evening have separate seats</small>
+</div>
+<div id="paymentAgentsDisplay"></div>
+<div style="background:#fff8e1;border:2px solid #ff9800;border-radius:10px;padding:10px;margin:10px 0">
+<b>📋 Paste FULL Orange Money SMS - Must contain Admin Number</b><br>
+<small>Example: "You sent 50000 Le to 072039074 Txn ID OGM123456"</small>
+<textarea id="cTxn" placeholder="Paste full SMS here - Must include admin number 072039074" oninput="validateTxn()"></textarea>
+<div id="txnError" style="color:red;font-weight:700;font-size:13px"></div>
+<div id="txnOk" style="color:green;font-weight:700;font-size:13px"></div>
+<small>Admin Numbers: <span id="adminNumbersList"></span></small>
+</div>
+Pay Method <select id="payMethod"></select>
+Name <input id="cName" placeholder="Full Name">Phone <input id="cPhone" placeholder="076...">
+<button id="payBtn" class="btn green" style="width:100%;padding:16px" onclick="submitBooking()" disabled>Pay Now - Paste Txn First</button>
+</div>
+
+<div id="pendingCard" class="card hidden" style="background:#fff3cd;text-align:center">
+<h3>⏳ Waiting Admin Approval - <span id="pendingSlot"></span> Bus</h3>
+Txn <b id="pendingTxn"></b><br><small id="pendingMsg">You cannot see ticket until admin approves</small><br><br>
+<button id="checkNowBtn" class="btn blue" style="width:100%;padding:16px" onclick="checkApproval()">Check Now</button>
+<div id="checkStatusMsg" style="margin-top:10px;font-weight:700"></div>
+</div>
+
+<div id="ticketCard" class="card hidden"><div style="text-align:center"><div class="check">✓</div><h2 style="color:#0a8a4b">Payment Approved!</h2><small id="ticketSlotBadge"></small></div>
+<div style="border:1px dashed #ccc;border-radius:14px;padding:14px;margin:10px 0"><div style="text-align:center;font-weight:700;font-size:18px" id="ticketRoute"></div><small id="ticketDate" style="display:block;text-align:center"></small><div id="ticketDetails"></div><div style="text-align:center"><canvas id="qrCanvas" width="180" height="180" style="border:1px solid #eee;border-radius:12px"></canvas><p id="ticketId"></p><div id="shareLink" style="word-break:break-all;background:#e8f5e9;padding:8px;border-radius:8px;font-size:11px"></div></div></div>
+<button class="btn green" style="width:100%" onclick="shareTicket()">Download Ticket</button></div>
+</div>
+
+<div id="sec-driver" class="hidden">
+<div id="driverLogin" class="card" style="max-width:420px;margin:20px auto"><h2>🚌 DRIVER LOGIN</h2>User <input id="dUser" value="driver1">Pass <input id="dPass" value="driver123"><button class="btn green" style="width:100%" onclick="driverLogin()">LOGIN</button></div>
+<div id="driverPanel" class="hidden">
+<div class="card" style="border:2px solid #1976d2"><button class="btn blue" style="width:100%;padding:16px" onclick="startCameraScan()">📷 OPEN CAMERA</button><div id="cameraArea" class="hidden"><video id="video" width="100%" height="280" style="background:#000" playsinline></video><canvas id="cameraCanvas" class="hidden"></canvas><button class="btn red" style="width:100%" onclick="stopCameraScan()">Close Camera</button></div><input id="manualId" placeholder="Paste link" style="margin-top:10px"><button class="btn orange" style="width:100%" onclick="validateManual()">Validate</button><div id="scanResult" style="margin-top:10px"></div></div>
+<div class="card"><h3>Passengers <span id="count"></span></h3><button class="btn blue" onclick="loadPass()">Refresh</button> <button class="btn red" onclick="clearScanned()">Clear</button><div id="passengerList"></div><h4>✅ Scanned Anti-Double</h4><div id="scannedList"></div></div>
+</div>
+</div>
+
+<div id="sec-admin" class="hidden">
+<div id="adminLogin" class="card" style="max-width:420px;margin:20px auto"><h2>ADMIN</h2><input id="adminPass" value="admin123"><button class="btn green" style="width:100%" onclick="adminLogin()">LOGIN</button></div>
+<div id="adminPanel" class="hidden">
+<div class="card" style="background:#111;color:#fff"><b>ADMIN CONTROL</b><div id="income" style="color:yellow;font-size:18px"></div><button onclick="adminLogout()" style="background:#d00;color:#fff;border:none;padding:6px 10px;border-radius:6px;float:right">Logout</button><div style="clear:both"></div></div>
+<div class="card"><h3>💳 Payment Numbers</h3><div id="agentsControl"></div><h4>+ Add</h4>Type <select id="newAgentType"><option>Orange Money</option><option>Africell Money</option><option>QMoney</option></select>Number <input id="newAgentNumber" placeholder="072039074">Name <input id="newAgentName" placeholder="Issa Koroma"><button class="btn orange" style="width:100%" onclick="addAgent()">+ Add</button></div>
+<div class="card"><h3>🚌 Buses</h3><div id="priceList"></div><h4>Add Bus</h4>To <input id="rTo" placeholder="Kailahun">Price <input id="rPrice" type="number">Slot <select id="rSlot"><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option></select>Time <input id="rTime" type="time">Bus No <input id="rBus" placeholder="B-210"><button class="btn green" style="width:100%" onclick="addRoute()">+ Add Bus</button></div>
+<div class="card" style="border:3px solid #ff7a00"><h3>⏳ Pending - Approve / Reject</h3><div id="txnList"></div></div>
+<div class="card" style="border:3px solid #0a8a4b"><h3>🌅 Morning Approved Table</h3><table><thead><tr><th>Ticket</th><th>Date</th><th>Name</th><th>To</th><th>Seat</th><th>Bus</th><th>Txn</th></tr></thead><tbody id="morningTable"></tbody></table></div>
+<div class="card" style="border:3px solid #ff9800"><h3>☀️ Afternoon Approved Table</h3><table><thead><tr><th>Ticket</th><th>Date</th><th>Name</th><th>To</th><th>Seat</th><th>Bus</th><th>Txn</th></tr></thead><tbody id="afternoonTable"></tbody></table></div>
+<div class="card" style="border:3px solid #6a1b9a"><h3>🌙 Evening Approved Table</h3><table><thead><tr><th>Ticket</th><th>Date</th><th>Name</th><th>To</th><th>Seat</th><th>Bus</th><th>Txn</th></tr></thead><tbody id="eveningTable"></tbody></table></div>
+<div class="card"><h3>All Bookings</h3><table><thead><tr><th>Ticket</th><th>Date</th><th>Slot</th><th>Name</th><th>To</th><th>Seat</th><th>Status</th></tr></thead><tbody id="allTable"></tbody></table></div>
+</div>
+</div>
+
+<script>
+var timeSlots={morning:{icon:'🌅',name:'Morning'},afternoon:{icon:'☀️',name:'Afternoon'},evening:{icon:'🌙',name:'Evening'}};
+var currentSlot='morning';
+var routes=JSON.parse(localStorage.getItem('sl_routes_v13')||localStorage.getItem('sl_routes_v12')||'null')||[
+{from:'Freetown',to:'Bo',price:45000,time:'08:30 AM',bus:'B-204-M',slot:'morning',capacity:24},
+{from:'Freetown',to:'Bo',price:45000,time:'02:00 PM',bus:'B-204-A',slot:'afternoon',capacity:24},
+{from:'Freetown',to:'Bo',price:50000,time:'06:30 PM',bus:'B-204-E',slot:'evening',capacity:24},
+{from:'Freetown',to:'Kono',price:70000,time:'07:30 AM',bus:'B-205-M',slot:'morning',capacity:24},
+{from:'Freetown',to:'Kono',price:70000,time:'01:30 PM',bus:'B-205-A',slot:'afternoon',capacity:24},
+{from:'Freetown',to:'Makeni',price:40000,time:'08:00 AM',bus:'B-206-M',slot:'morning',capacity:24},
+{from:'Freetown',to:'Makeni',price:40000,time:'06:00 PM',bus:'B-206-E',slot:'evening',capacity:24},
+{from:'Freetown',to:'Kenema',price:50000,time:'09:00 AM',bus:'B-207-M',slot:'morning',capacity:24},
+{from:'Freetown',to:'Kenema',price:50000,time:'07:00 PM',bus:'B-207-E',slot:'evening',capacity:24}
+];
+var agents=JSON.parse(localStorage.getItem('sl_agents_v13')||localStorage.getItem('sl_agents_v12')||'null')||[
+{type:'Orange Money',number:'072039074',name:'Issa Koroma'},{type:'Africell Money',number:'076123456',name:'Issa Koroma'}];
+localStorage.setItem('sl_routes_v13',JSON.stringify(routes));localStorage.setItem('sl_agents_v13',JSON.stringify(agents));
+var selRoute=null;var selSeat=null;var curDriver=null;var isAdmin=false;var lastTicket=null;var videoStream=null;
+function go(s){document.getElementById('sec-customer').classList.add('hidden');document.getElementById('sec-driver').classList.add('hidden');document.getElementById('sec-admin').classList.add('hidden');document.getElementById('n1').classList.remove('active');document.getElementById('n2').classList.remove('active');document.getElementById('n3').classList.remove('active');document.getElementById('sec-'+s).classList.remove('hidden');document.getElementById('n'+(s=='customer'?1:s=='driver'?2:3)).classList.add('active');if(s=='customer')loadBuses();if(s=='admin'&&isAdmin)loadAdmin();}
+function setTimeSlot(slot){currentSlot=slot;document.getElementById('tMorning').classList.remove('active');document.getElementById('tAfternoon').classList.remove('active');document.getElementById('tEvening').classList.remove('active');document.getElementById('t'+slot.charAt(0).toUpperCase()+slot.slice(1)).classList.add('active');document.getElementById('currentSlotText').textContent=timeSlots[slot].icon+' '+timeSlots[slot].name+' Buses - Today '+new Date().toLocaleDateString();document.getElementById('slotTitle').textContent=timeSlots[slot].name;loadBuses();}
+function loadBuses(){var bookings=JSON.parse(localStorage.getItem('sl_bookings_v13')||localStorage.getItem('sl_bookings_v12')||'[]');var today=new Date().toISOString().slice(0,10);var html='';for(var i=0;i<routes.length;i++){if(routes[i].slot!=currentSlot)continue;var r=routes[i];var cnt=0;for(var j=0;j<bookings.length;j++)if(bookings[j].bus==r.bus&&bookings[j].date==today&&bookings[j].status!='rejected')cnt++;var avail=r.capacity-cnt;var full=avail<=0;html+='<div class=\"bus-card\"><div><b>Freetown → '+r.to+'</b><br><small>🕒 '+r.time+' • Bus #'+r.bus+' • '+timeSlots[r.slot].icon+' '+r.slot+'</small><br><div class=\"bus-price\">'+r.price.toLocaleString()+' SLL</div><small>'+(full?'SOLD OUT':avail+' seats left today - Tomorrow new')+'</small></div><div><span class=\"badge '+(full?'badge-sold':'badge-avail')+'\">'+(full?'SOLD':avail+' left')+'</span><br><br><button class=\"btn green\" style=\"padding:8px 14px\" onclick=\"selectBus(\''+r.bus+'\')\">Select</button></div></div>';}if(!html)html='<div style=\"padding:20px;text-align:center;color:#666\">No '+currentSlot+' buses - Admin add</div>';document.getElementById('busList').innerHTML=html;}
+function selectBus(busId){for(var i=0;i<routes.length;i++)if(routes[i].bus==busId){selRoute=routes[i];break;}document.getElementById('seatSlotIcon').textContent=timeSlots[selRoute.slot].icon;document.getElementById('seatSlotName').textContent=timeSlots[selRoute.slot].name;document.getElementById('seatSub').textContent='Freetown → '+selRoute.to+' • '+selRoute.time+' • Bus #'+selRoute.bus;document.getElementById('sumBus').textContent=selRoute.bus+' ('+selRoute.slot+')';document.getElementById('sumTo').textContent=selRoute.to;document.getElementById('sumTime').textContent=selRoute.time;document.getElementById('sumPrice').textContent=selRoute.price.toLocaleString()+' SLL';document.getElementById('payBtnPrice').textContent=selRoute.price.toLocaleString()+' Le';document.getElementById('paySlotBtn').textContent=timeSlots[selRoute.slot].name;document.getElementById('slotOnlyText').textContent=timeSlots[selRoute.slot].name;selSeat=null;document.getElementById('sumSeat').textContent='NOT SELECTED';document.getElementById('seatSection').classList.remove('hidden');loadSeats();loadPaymentDisplay();validateTxn();document.getElementById('seatSection').scrollIntoView({behavior:'smooth'});}
+function loadSeats(){var bookings=JSON.parse(localStorage.getItem('sl_bookings_v13')||localStorage.getItem('sl_bookings_v12')||'[]');var today=new Date().toISOString().slice(0,10);var rb=[];for(var i=0;i<bookings.length;i++)if(bookings[i].bus==selRoute.bus&&bookings[i].date==today&&bookings[i].status!='rejected')rb.push(bookings[i]);var cont=document.getElementById('seats');cont.innerHTML='';var full=rb.length>=selRoute.capacity;document.getElementById('soldBadge').innerHTML=full?'<span class=\"badge badge-sold\">SOLD OUT</span>':'<span class=\"badge badge-avail\">Avail '+(selRoute.capacity-rb.length)+' today</span>';for(var i=1;i<=selRoute.capacity;i++){var sid='A'+i;var sold=false;for(var j=0;j<rb.length;j++)if(rb[j].seat==sid){sold=true;break;}var d=document.createElement('div');d.className='seat'+(sold?' sold':'');d.textContent=sid;d.setAttribute('data-seat',sid);if(!sold){d.onclick=function(){var seat=this.getAttribute('data-seat');var all=document.querySelectorAll('.seat');for(var k=0;k<all.length;k++)all[k].classList.remove('selected');this.classList.add('selected');selSeat=seat;document.getElementById('sumSeat').textContent=seat;document.getElementById('sumSeat').style.color='#0a8a4b';};}cont.appendChild(d);}}
+function loadPaymentDisplay(){var html='';var selHtml='';var numList='';for(var i=0;i<agents.length;i++){var a=agents[i];html+='<div style=\"background:#f8faf9;border:1px solid #e0e0e0;border-radius:12px;padding:10px;margin:8px 0\"><div style=\"display:flex;justify-content:space-between\"><span>Number</span><span style=\"font-weight:700\">'+a.number+' ('+a.type+')</span></div><div style=\"display:flex;justify-content:space-between\"><span>Name</span><span>'+a.name+'</span></div><div style=\"display:flex;justify-content:space-between\"><span>Amount</span><span style=\"color:#0a8a4b;font-weight:800\">'+(selRoute?selRoute.price.toLocaleString():'--')+' Le</span></div></div>';selHtml+='<option value=\"'+i+'\">'+a.type+' - '+a.number+'</option>';numList+=a.number+', ';}document.getElementById('paymentAgentsDisplay').innerHTML=html;document.getElementById('payMethod').innerHTML=selHtml;document.getElementById('adminNumbersList').textContent=numList;}
+function validateTxn(){
+var txt=document.getElementById('cTxn').value.trim();
+var err=document.getElementById('txnError');
+var ok=document.getElementById('txnOk');
+var btn=document.getElementById('payBtn');
+if(!txt){err.textContent='';ok.textContent='';btn.disabled=true;btn.textContent='Paste Txn First - Cannot Pay';return;}
+var foundAdmin=false;
+for(var i=0;i<agents.length;i++){if(txt.indexOf(agents[i].number)>=0||txt.replace(/\s/g,'').indexOf(agents[i].number)>=0){foundAdmin=true;break;}}
+if(!foundAdmin){err.textContent='❌ Admin number NOT found! Paste FULL SMS that includes '+agents[0].number;ok.textContent='';btn.disabled=true;btn.textContent='❌ No Admin Number - Cannot Pay';return;}
+if(txt.length<6){err.textContent='❌ Txn too short';ok.textContent='';btn.disabled=true;return;}
+err.textContent='';ok.textContent='✅ Admin number found - OK to Pay!';btn.disabled=false;btn.textContent='Pay Now '+document.getElementById('payBtnPrice').textContent+' - '+document.getElementById('paySlotBtn').textContent;
+}
+function submitBooking(){
+if(!selRoute||!selSeat){alert('Select bus and seat');return;}
+var n=document.getElementById('cName').value;var p=document.getElementById('cPhone').value;var txnFull=document.getElementById('cTxn').value.trim();
+if(!n||!p||!txnFull){alert('Fill all');return;}
+var txnId=txnFull.match(/(OGM[A-Z0-9]+|[A-Z0-9]{6,20})/i);var shortTxn=txnId?txnId[0].toUpperCase():txnFull.slice(0,30).toUpperCase();
+var tid='TKT-SL'+Date.now().toString().slice(-6)+'-'+Math.floor(100+Math.random()*900);var code='SEC'+Math.random().toString(36).slice(2,8).toUpperCase();
+var today=new Date().toISOString().slice(0,10);
+var payIdx=parseInt(document.getElementById('payMethod').value)||0;var payAgent=agents[payIdx];
+var b={id:tid,from:'Freetown',to:selRoute.to,date:today,slot:selRoute.slot,name:n,phone:p,seat:selSeat,txn:shortTxn,fullTxn:txnFull,payType:payAgent.type,payNumber:payAgent.number,price:selRoute.price,bus:selRoute.bus,time:selRoute.time,status:'pending',code:code,boarded:false};
+var all=JSON.parse(localStorage.getItem('sl_bookings_v13')||'[]');all.push(b);localStorage.setItem('sl_bookings_v13',JSON.stringify(all));localStorage.setItem('sl_pending_v13',tid);
+document.getElementById('seatSection').classList.add('hidden');document.getElementById('pendingCard').classList.remove('hidden');document.getElementById('pendingTxn').textContent=shortTxn;document.getElementById('pendingSlot').textContent=timeSlots[selRoute.slot].name;document.getElementById('checkStatusMsg').textContent='';document.getElementById('ticketCard').classList.add('hidden');
+}
+function checkApproval(){
+var id=localStorage.getItem('sl_pending_v13');var all=JSON.parse(localStorage.getItem('sl_bookings_v13')||'[]');var b=null;for(var i=0;i<all.length;i++)if(all[i].id==id){b=all[i];break;}
+var msgDiv=document.getElementById('checkStatusMsg');
+if(!b){msgDiv.textContent='No booking';msgDiv.style.color='red';return;}
+if(b.status=='pending'){msgDiv.textContent='⏳ Still pending - Admin not approved. Cannot see ticket!';msgDiv.style.color='#ff9800';alert('Pending - Admin must approve first!');return;}
+if(b.status=='rejected'){msgDiv.textContent='❌ REJECTED by Admin - No ticket!';msgDiv.style.color='red';document.getElementById('pendingCard').classList.add('hidden');alert('REJECTED - Contact Admin');localStorage.removeItem('sl_pending_v13');return;}
+if(b.status=='approved'){showTicket(b);return;}
+}
+function showTicket(b){lastTicket=b;document.getElementById('pendingCard').classList.add('hidden');document.getElementById('ticketCard').classList.remove('hidden');document.getElementById('ticketId').textContent=b.id+' • '+b.date;document.getElementById('ticketRoute').textContent='Freetown → '+b.to;document.getElementById('ticketDate').textContent=b.date+' • '+b.time+' • '+timeSlots[b.slot].icon+' '+timeSlots[b.slot].name+' Bus • Bus #'+b.bus;document.getElementById('ticketSlotBadge').textContent=timeSlots[b.slot].icon+' '+timeSlots[b.slot].name+' Bus';document.getElementById('ticketDetails').innerHTML='<div style=\"display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:6px 0\"><span>Passenger:</span><span><b>'+b.name+'</b></span></div><div style=\"display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:6px 0\"><span>Seat:</span><span>Seat '+b.seat+' ('+b.slot+')</span></div><div style=\"display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:6px 0\"><span>Txn:</span><span>'+b.txn+'</span></div><div style=\"display:flex;justify-content:space-between;padding:6px 0\"><span>Date:</span><span>'+b.date+'</span></div>';drawQR(document.getElementById('qrCanvas'),b.id+'|'+b.code+'|'+b.name+'|'+b.seat+'|'+b.bus+'|'+b.to+'|'+b.slot+'|'+b.date);var link=location.origin+location.pathname+'?v=13&ticket='+encodeURIComponent(b.id)+'&c='+b.code+'&name='+encodeURIComponent(b.name)+'&seat='+b.seat+'&bus='+b.bus+'&to='+b.to+'&slot='+b.slot+'&date='+b.date;document.getElementById('shareLink').textContent=link;}
+function shareTicket(){window.open('https://wa.me/?text='+encodeURIComponent('My Ticket '+lastTicket.id+' '+document.getElementById('shareLink').textContent));}
+function drawQR(c,t){var ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,200,200);ctx.fillStyle='#000';var h=0;for(var i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))%1000;for(var y=0;y<20;y++)for(var x=0;x<20;x++)if((x*y+h)%7<3)ctx.fillRect(x*10,y*10,9,9);}
+function startCameraScan(){document.getElementById('cameraArea').classList.remove('hidden');var video=document.getElementById('video');navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(s){videoStream=s;video.srcObject=s;video.play();scanLoop();}).catch(function(err){alert('Camera error '+err);});}
+function stopCameraScan(){if(videoStream){videoStream.getTracks().forEach(function(t){t.stop();});}document.getElementById('cameraArea').classList.add('hidden');}
+function scanLoop(){var video=document.getElementById('video');var canvas=document.getElementById('cameraCanvas');if(video.readyState===video.HAVE_ENOUGH_DATA){canvas.width=video.videoWidth;canvas.height=video.videoHeight;var ctx=canvas.getContext('2d');ctx.drawImage(video,0,0,canvas.width,canvas.height);try{var imageData=ctx.getImageData(0,0,canvas.width,canvas.height);var code=jsQR(imageData.data,imageData.width,imageData.height);if(code){document.getElementById('manualId').value=code.data;validateManual();stopCameraScan();return;}}catch(e){}}if(!document.getElementById('cameraArea').classList.contains('hidden'))requestAnimationFrame(scanLoop);}
+function driverLogin(){var u=document.getElementById('dUser').value.trim();var p=document.getElementById('dPass').value.trim();if(u=='driver1'&&p=='driver123'){curDriver={user:'driver1'};document.getElementById('driverLogin').classList.add('hidden');document.getElementById('driverPanel').classList.remove('hidden');loadPass();return;}}
+function validateManual(){var input=document.getElementById('manualId').value.trim();if(!input){alert('Paste');return;}var id='',name='',seat='',bus='',slot='',date='';if(input.indexOf('ticket=')>=0){try{var url=new URL(input);id=url.searchParams.get('ticket')||'';name=url.searchParams.get('name')||'';seat=url.searchParams.get('seat')||'';bus=url.searchParams.get('bus')||'';slot=url.searchParams.get('slot')||'';date=url.searchParams.get('date')||'';}catch(e){id=input;}}else{var parts=input.split('|');if(parts.length>1){id=parts[0];name=parts[2]||'';seat=parts[3]||'';bus=parts[4]||'';slot=parts[6]||'';date=parts[7]||'';}else id=input;}
+var scanned=JSON.parse(localStorage.getItem('sl_scanned_v13')||'[]');for(var s=0;s<scanned.length;s++){if(scanned[s].id==id||(name&&scanned[s].name==decodeURIComponent(name)&&scanned[s].seat==seat&&scanned[s].date==date)){document.getElementById('scanResult').innerHTML='<div class=\"invalid\">❌ ALREADY USED<br>'+(scanned[s].name||name)+' Seat '+seat+' '+slot+' '+date+' entered at '+scanned[s].time+'</div>';return;}}
+var all=JSON.parse(localStorage.getItem('sl_bookings_v13')||'[]');var b=null;for(var i=0;i<all.length;i++)if(all[i].id==id||all[i].id.indexOf(id)>=0){b=all[i];break;}if(!b&&id.indexOf('TKT-SL')>=0){var entry={id:id,name:decodeURIComponent(name||''),seat:seat,bus:bus,slot:slot,date:date,time:new Date().toLocaleString()};scanned.push(entry);localStorage.setItem('sl_scanned_v13',JSON.stringify(scanned));document.getElementById('scanResult').innerHTML='<div class=\"valid\">✅ VALID<br>'+id+' Slot '+slot+' Date '+date+' Seat '+seat+' GREEN LET ENTER</div>';loadPass();return;}if(!b){document.getElementById('scanResult').innerHTML='<div class=\"invalid\">❌ FAKE</div>';return;}if(b.boarded){document.getElementById('scanResult').innerHTML='<div class=\"invalid\">❌ ALREADY USED<br>'+b.name+' Seat '+b.seat+' entered at '+b.boardedTime+'</div>';return;}b.boarded=true;b.boardedTime=new Date().toLocaleString();localStorage.setItem('sl_bookings_v13',JSON.stringify(all));var entry={id:b.id,name:b.name,seat:b.seat,bus:b.bus,slot:b.slot,date:b.date,time:b.boardedTime};scanned.push(entry);localStorage.setItem('sl_scanned_v13',JSON.stringify(scanned));document.getElementById('scanResult').innerHTML='<div class=\"valid\">✅ VALID GREEN<br>'+b.name+' Seat '+b.seat+'<br>'+timeSlots[b.slot].icon+' '+b.slot+' '+b.date+' GREEN</div>';loadPass();}
+function loadPass(){var all=JSON.parse(localStorage.getItem('sl_bookings_v13')||'[]');var today=new Date().toISOString().slice(0,10);var list=[];for(var i=0;i<all.length;i++)if(all[i].status=='approved'&&all[i].date==today)list.push(all[i]);var html='<table><tr><th>Slot</th><th>Seat</th><th>Name</th><th>Status</th></tr>';for(var i=0;i<list.length;i++)html+='<tr><td>'+timeSlots[list[i].slot].icon+' '+list[i].slot+'</td><td>'+list[i].seat+'</td><td>'+list[i].name+'</td><td>'+(list[i].boarded?'✅':'⏳')+'</td></tr>';html+='</table>';document.getElementById('passengerList').innerHTML=html;document.getElementById('count').textContent=list.length+' today '+today;var scanned=JSON.parse(localStorage.getItem('sl_scanned_v13')||'[]');var sHtml='';for(var i=scanned.length-1;i>=0;i--)if(scanned[i].date==today)sHtml+='<div style=\"padding:6px;background:#e8f5e9;margin:3px 0;border-radius:6px\"><b>'+scanned[i].slot+' '+scanned[i].seat+'</b> '+scanned[i].name+' - '+scanned[i].time+'</div>';document.getElementById('scannedList').innerHTML=sHtml||'No scans today';}
+function clearScanned(){if(confirm('Clear today?')){localStorage.removeItem('sl_scanned_v13');loadPass();document.getElementById('scanResult').innerHTML='';}}
+function adminLogin(){var s=localStorage.getItem('sl_admin_v13')||'admin123';var e=document.getElementById('adminPass').value.trim();if(e==s){isAdmin=true;document.getElementById('adminLogin').classList.add('hidden');document.getElementById('adminPanel').classList.remove('hidden');loadAdmin();}else alert('Wrong');}
+function adminLogout(){isAdmin=false;document.getElementById('adminLogin').classList.remove('hidden');document.getElementById('adminPanel').classList.add('hidden');}
+function loadAdmin(){
+var html='';for(var i=0;i<agents.length;i++){var a=agents[i];html+='<div style=\"padding:8px;border:1px solid #ddd;border-radius:8px;margin:4px 0\"><b>'+a.type+'</b> <input id=\"ag_num_'+i+'\" value=\"'+a.number+'\" style=\"width:120px;display:inline-block\"> <button class=\"btn green\" style=\"width:auto;padding:4px 8px\" onclick=\"updAgent('+i+')\">Update</button> <button class=\"btn red\" style=\"width:auto;padding:4px 8px\" onclick=\"delAgent('+i+')\">Del</button></div>';}document.getElementById('agentsControl').innerHTML=html;
+var priceHtml='';for(var i=0;i<routes.length;i++){priceHtml+='<div style=\"padding:8px;border:1px solid #ddd;border-radius:8px;margin:4px 0\"><b>'+routes[i].bus+' →'+routes[i].to+'</b> '+timeSlots[routes[i].slot].icon+' '+routes[i].slot+' '+routes[i].time+'<br>Price <input id=\"pr_'+i+'\" type=\"number\" value=\"'+routes[i].price+'\" style=\"width:80px;display:inline-block\"> <button class=\"btn green\" style=\"width:auto;padding:4px 8px\" onclick=\"updPrice('+i+')\">Update</button> <button class=\"btn red\" style=\"width:auto;padding:4px 8px\" onclick=\"delRoute('+i+')\">Del</button></div>';}document.getElementById('priceList').innerHTML=priceHtml;
+var all=JSON.parse(localStorage.getItem('sl_bookings_v13')||'[]');
+var pend=[];for(var i=0;i<all.length;i++)if(all[i].status=='pending')pend.push(all[i]);
+var phtml=pend.length?'':'No pending';for(var i=0;i<pend.length;i++){
+phtml+='<div style=\"padding:12px;background:#fff8e1;border:1px solid #ffcc80;border-radius:10px;margin:8px 0\">'
++'<b>'+pend[i].date+'</b> '+timeSlots[pend[i].slot].icon+' <b>Txn: '+pend[i].txn+'</b><br>'
++'Full: <small>'+(pend[i].fullTxn||'').slice(0,80)+'</small><br>'
++''+pend[i].name+' →'+pend[i].to+' Seat <b>'+pend[i].seat+'</b> Bus '+pend[i].bus+' '+pend[i].slot+'<br>'
++'<small>'+pend[i].payType+' '+pend[i].payNumber+' - '+pend[i].price.toLocaleString()+' Le</small><br>'
++'<div style=\"display:flex;gap:10px;margin-top:10px\">'
++'<button class=\"btn green\" style=\"flex:1;padding:12px;font-size:16px\" onclick=\"approveTxn(\''+pend[i].id+'\')\">✅ Approve</button>'
++'<button class=\"btn red\" style=\"flex:1;padding:12px;font-size:16px\" onclick=\"rejectTxn(\''+pend[i].id+'\')\">❌ Reject</button>'
++'</div></div>';
+}
+document.getElementById('txnList').innerHTML=phtml;
+var mT=document.getElementById('morningTable');var aT=document.getElementById('afternoonTable');var eT=document.getElementById('eveningTable');var allT=document.getElementById('allTable');
+mT.innerHTML='';aT.innerHTML='';eT.innerHTML='';allT.innerHTML='';
+var inc=0;for(var i=all.length-1;i>=0;i--){if(all[i].status=='approved')inc+=all[i].price;
+var row='<tr><td>'+all[i].id.slice(-6)+'</td><td>'+all[i].date+'</td><td>'+all[i].name+'</td><td>'+all[i].to+'</td><td>'+all[i].seat+'</td><td>'+all[i].bus+'</td><td>'+all[i].txn+'</td></tr>';
+if(all[i].status=='approved'){
+if(all[i].slot=='morning')mT.innerHTML+=row;
+if(all[i].slot=='afternoon')aT.innerHTML+=row;
+if(all[i].slot=='evening')eT.innerHTML+=row;
+}
+var row2='<tr><td>'+all[i].id.slice(-6)+'</td><td>'+all[i].date+'</td><td>'+all[i].slot+'</td><td>'+all[i].name+'</td><td>'+all[i].to+'</td><td>'+all[i].seat+'</td><td>'+all[i].status+'</td></tr>';
+allT.innerHTML+=row2;
+}
+if(!mT.innerHTML)mT.innerHTML='<tr><td colspan=7>No morning approved</td></tr>';
+if(!aT.innerHTML)aT.innerHTML='<tr><td colspan=7>No afternoon approved</td></tr>';
+if(!eT.innerHTML)eT.innerHTML='<tr><td colspan=7>No evening approved</td></tr>';
+document.getElementById('income').textContent='Income '+inc.toLocaleString()+' Le - Today '+new Date().toLocaleDateString();
+}
+function updAgent(i){var num=document.getElementById('ag_num_'+i).value.trim();if(!num)return;agents[i].number=num;localStorage.setItem('sl_agents_v13',JSON.stringify(agents));loadAdmin();loadPaymentDisplay();}
+function delAgent(i){if(confirm('Delete?')){agents.splice(i,1);localStorage.setItem('sl_agents_v13',JSON.stringify(agents));loadAdmin();loadPaymentDisplay();}}
+function addAgent(){var type=document.getElementById('newAgentType').value;var num=document.getElementById('newAgentNumber').value.trim();var name=document.getElementById('newAgentName').value.trim();if(!num)return;agents.push({type:type,number:num,name:name});localStorage.setItem('sl_agents_v13',JSON.stringify(agents));document.getElementById('newAgentNumber').value='';document.getElementById('newAgentName').value='';loadAdmin();loadPaymentDisplay();}
+function updPrice(i){var v=parseInt(document.getElementById('pr_'+i).value);if(!v)return;routes[i].price=v;localStorage.setItem('sl_routes_v13',JSON.stringify(routes));loadBuses();loadAdmin();}
+function delRoute(i){if(confirm('Delete '+routes[i].bus+'?')){routes.splice(i,1);localStorage.setItem('sl_routes_v13',JSON.stringify(routes));loadBuses();loadAdmin();}}
+function addRoute(){var t=document.getElementById('rTo').value;var p=parseInt(document.getElementById('rPrice').value);var sl=document.getElementById('rSlot').value;var ti=document.getElementById('rTime').value;var bu=document.getElementById('rBus').value||('B-'+(210+routes.length)+'-'+sl.charAt(0).toUpperCase());if(!t||!p){alert('Enter To Price');return;}routes.push({from:'Freetown',to:t,price:p,time:(ti||'08:00')+' '+(sl=='morning'?'AM':'PM'),bus:bu,slot:sl,capacity:24});localStorage.setItem('sl_routes_v13',JSON.stringify(routes));loadBuses();loadAdmin();document.getElementById('rTo').value='';document.getElementById('rPrice').value='';}
+function approveTxn(id){var all=JSON.parse(localStorage.getItem('sl_bookings_v13')||'[]');for(var i=0;i<all.length;i++)if(all[i].id==id){all[i].status='approved';}localStorage.setItem('sl_bookings_v13',JSON.stringify(all));loadAdmin();alert('✅ Approved - Moved to '+all.find(b=>b.id==id).slot+' table');}
+function rejectTxn(id){if(!confirm('Reject? Seat will free - Customer cannot see ticket!'))return;var all=JSON.parse(localStorage.getItem('sl_bookings_v13')||'[]');for(var i=0;i<all.length;i++)if(all[i].id==id){all[i].status='rejected';}localStorage.setItem('sl_bookings_v13',JSON.stringify(all));loadAdmin();loadBuses();alert('❌ Rejected - Seat freed');}
+(function(){var params=new URLSearchParams(location.search);var t=params.get('ticket');if(t){go('driver');document.getElementById('manualId').value=location.href;setTimeout(function(){if(!curDriver){document.getElementById('dUser').value='driver1';document.getElementById('dPass').value='driver123';driverLogin();}setTimeout(validateManual,600);},800);}})();
+loadBuses();
+</script>
+</body>
+</html>
